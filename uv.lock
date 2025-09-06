@@ -21,12 +21,35 @@ wheels = [
 ]
 
 [[package]]
+name = "arrow"
+version = "1.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "python-dateutil" },
+    { name = "types-python-dateutil" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/2e/00/0f6e8fcdb23ea632c866620cc872729ff43ed91d284c866b515c6342b173/arrow-1.3.0.tar.gz", hash = "sha256:d4540617648cb5f895730f1ad8c82a65f2dad0166f57b75f3ca54759c4d67a85", size = 131960, upload-time = "2023-09-30T22:11:18.25Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f8/ed/e97229a566617f2ae958a6b13e7cc0f585470eac730a73e9e82c32a3cdd2/arrow-1.3.0-py3-none-any.whl", hash = "sha256:c728b120ebc00eb84e01882a6f5e7927a53960aa990ce7dd2b10f39005a67f80", size = 66419, upload-time = "2023-09-30T22:11:16.072Z" },
+]
+
+[[package]]
+name = "attrs"
+version = "25.3.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/5a/b0/1367933a8532ee6ff8d63537de4f1177af4bff9f3e829baf7331f595bb24/attrs-25.3.0.tar.gz", hash = "sha256:75d7cefc7fb576747b2c81b4442d4d4a1ce0900973527c011d1030fd3bf4af1b", size = 812032, upload-time = "2025-03-13T11:10:22.779Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/77/06/bb80f5f86020c4551da315d78b3ab75e8228f89f0162f2c3a819e407941a/attrs-25.3.0-py3-none-any.whl", hash = "sha256:427318ce031701fea540783410126f03899a97ffc6f61596ad581ac2e40e3bc3", size = 63815, upload-time = "2025-03-13T11:10:21.14Z" },
+]
+
+[[package]]
 name = "cascade"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "common-expression-language" },
     { name = "croniter" },
+    { name = "ics" },
     { name = "numpy" },
     { name = "ortools" },
     { name = "prompt-toolkit" },
@@ -41,6 +64,7 @@ dependencies = [
 requires-dist = [
     { name = "common-expression-language", specifier = ">=0.5.0" },
     { name = "croniter", specifier = ">=6.0.0" },
+    { name = "ics", specifier = ">=0.7.2" },
     { name = "numpy", specifier = ">=2.3.2" },
     { name = "ortools", specifier = ">=9.14.6206" },
     { name = "prompt-toolkit", specifier = ">=3.0.51" },
@@ -123,6 +147,22 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/ad/2f/44d1ae153a0e27be56be43465e5cb39b9650c781e001e7864389deb25090/croniter-6.0.0.tar.gz", hash = "sha256:37c504b313956114a983ece2c2b07790b1f1094fe9d81cc94739214748255577", size = 64481, upload-time = "2024-12-17T17:17:47.32Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/07/4b/290b4c3efd6417a8b0c284896de19b1d5855e6dbdb97d2a35e68fa42de85/croniter-6.0.0-py2.py3-none-any.whl", hash = "sha256:2f878c3856f17896979b2a4379ba1f09c83e374931ea15cc835c5dd2eee9b368", size = 25468, upload-time = "2024-12-17T17:17:45.359Z" },
+]
+
+[[package]]
+name = "ics"
+version = "0.7.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "arrow" },
+    { name = "attrs" },
+    { name = "python-dateutil" },
+    { name = "six" },
+    { name = "tatsu" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/43/fa/2cb7cbe23566140f011da4fec280d4873da4389c8b838bb3e5ce3fc39b16/ics-0.7.2.tar.gz", hash = "sha256:6743539bca10391635249b87d74fcd1094af20b82098bebf7c7521df91209f05", size = 190643, upload-time = "2022-07-06T11:25:41.666Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0a/95/e04dea5cf29bdf5005f5aa7ccf0a2f9724b877722d89f8286dc3785a7cdc/ics-0.7.2-py2.py3-none-any.whl", hash = "sha256:5fcf4d29ec6e7dfcb84120abd617bbba632eb77b097722b7df70e48dbcf26103", size = 40086, upload-time = "2022-07-06T11:25:36.536Z" },
 ]
 
 [[package]]
@@ -533,6 +573,15 @@ wheels = [
 ]
 
 [[package]]
+name = "tatsu"
+version = "5.13.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e4/f8/20ede366a64e682ce734573e4ed81e16ff7d6dd23eb809c64b7a9659c124/tatsu-5.13.1.tar.gz", hash = "sha256:df8c216eecd09af9b5b308624f1bfda1e4b5af3d3df1bdc4f331a1e8ea6bc012", size = 131775, upload-time = "2025-01-10T22:22:35.65Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f5/68/12d01401a484cc8466b48c9cc4f56b1b3207b683af3b9d740481f1b2bf9b/TatSu-5.13.1-py3-none-any.whl", hash = "sha256:941e12df8798f444957600346c52a5ff3455f485de5b4570a3a71a00ed896a14", size = 80195, upload-time = "2025-01-10T22:22:32.552Z" },
+]
+
+[[package]]
 name = "text-unidecode"
 version = "1.3"
 source = { registry = "https://pypi.org/simple" }
@@ -554,6 +603,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/c5/8c/7d682431efca5fd290017663ea4588bf6f2c6aad085c7f108c5dbc316e70/typer-0.16.0.tar.gz", hash = "sha256:af377ffaee1dbe37ae9440cb4e8f11686ea5ce4e9bae01b84ae7c63b87f1dd3b", size = 102625, upload-time = "2025-05-26T14:30:31.824Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/76/42/3efaf858001d2c2913de7f354563e3a3a2f0decae3efe98427125a8f441e/typer-0.16.0-py3-none-any.whl", hash = "sha256:1f79bed11d4d02d4310e3c1b7ba594183bcedb0ac73b27a9e5f28f6fb5b98855", size = 46317, upload-time = "2025-05-26T14:30:30.523Z" },
+]
+
+[[package]]
+name = "types-python-dateutil"
+version = "2.9.0.20250809"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/a3/53/07dac71db45fb6b3c71c2fd29a87cada2239eac7ecfb318e6ebc7da00a3b/types_python_dateutil-2.9.0.20250809.tar.gz", hash = "sha256:69cbf8d15ef7a75c3801d65d63466e46ac25a0baa678d89d0a137fc31a608cc1", size = 15820, upload-time = "2025-08-09T03:14:14.109Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/43/5e/67312e679f612218d07fcdbd14017e6d571ce240a5ba1ad734f15a8523cc/types_python_dateutil-2.9.0.20250809-py3-none-any.whl", hash = "sha256:768890cac4f2d7fd9e0feb6f3217fce2abbfdfc0cadd38d11fba325a815e4b9f", size = 17707, upload-time = "2025-08-09T03:14:13.314Z" },
 ]
 
 [[package]]

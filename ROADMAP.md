@@ -45,3 +45,7 @@ skedpal dependency management seems like a mess to use.
 Our priority now is to create an easy to interface text-based todolist format (not exactly YAML) so that tasks are easy to create/split etc.
 
 And figure out how to enforce time mask (hard/soft mask? how to reconcile with existing ideas?)
+
+# TODOs
+- [ ] Add `after` keyword to tasks so I can specify e.g. do it after Friday 13:00
+- [ ] Allow importing bg from a calendar subscribe.

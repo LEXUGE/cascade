@@ -8,6 +8,7 @@ requires-python = ">=3.12"
 dependencies = [
     "common-expression-language>=0.5.0",
     "croniter>=6.0.0",
+    "ics>=0.7.2",
     "numpy>=2.3.2",
     "ortools>=9.14.6206",
     "prompt-toolkit>=3.0.51",

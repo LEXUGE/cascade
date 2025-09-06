@@ -91,11 +91,18 @@ def handle_cmd(raw_cmd: str, state: "AppState"):
                     ast = ProcessedAST.from_raw_ast(state.src)
                     sol = (
                         BasicModel.from_processed_ast(ast, start, end)
-                        .to_utility_model()
-                        .to_interval_len_model()
-                        .solve()
+                        .to_total_utility_model()
+                        .to_cuf_model()
+                        .to_interval_model()
+                        .to_schedule()
                     )
+                    state.schedule = sol
                     sol.print_schedule()
+                case ["export", "ics"]:
+                    if state.schedule is None:
+                        print("No schedule compiled. Please compile first.")
+                    else:
+                        pprint(HTML(f"<grey>{state.schedule.to_ics()}</grey>"))
                 case _:
                     pprint(
                         "Usage: dev [normalize_deps | propagate_ddl | processed_ast | compile <start_date> <end_date>]"
@@ -118,6 +125,9 @@ def repl(state: "AppState") -> None:
                 "propagate": None,
                 "processed_ast": None,
                 "compile": None,
+                "export": {
+                    "ics": None,
+                },
             },
         }
     )

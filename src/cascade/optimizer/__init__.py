@@ -7,9 +7,10 @@ Converted from ProcessedAST to CompiledModel which can be solved by CP-SAT solve
 
 from __future__ import annotations
 from itertools import chain
+from ics import Calendar, Event
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional, Tuple
+from typing import Any
 from prompt_toolkit import HTML, print_formatted_text
 from typing_extensions import Self, Dict
 from ortools.sat.python import cp_model
@@ -61,22 +62,39 @@ class ScheduleDetail:
     start: datetime
     end: datetime
     task_length: int
-    task_score: float
+    task_utility: float
 
 
 @dataclass
 class Schedule:
+    objective: int
     schedule: Dict[str, ScheduleDetail]
 
-    def get_total_score(self) -> float:
-        return sum(detail.task_score for detail in self.schedule.values())
+    def get_objective(self) -> int:
+        return self.objective
+
+    def get_total_utility(self) -> float:
+        return sum([detail.task_utility for detail in self.schedule.values()])
 
     def get_total_length_slots(self) -> int:
         return sum(detail.task_length for detail in self.schedule.values())
 
+    def to_ics(self) -> str:
+        c = Calendar()
+        for id, detail in self.schedule.items():
+            if detail.task_length != 0:
+                e = Event()
+                e.name = detail.name
+                e.begin = detail.start
+                e.end = detail.end
+                e.description = f"Task ID: {id}, Score: {detail.task_utility / YSCALE}"
+                c.events.add(e)
+
+        return c.serialize()
+
     def print_schedule(self):
         print_formatted_text(
-            HTML(f"<b>Total utility:</b> {self.get_total_score() / YSCALE}")
+            HTML(f"<b>Total utility:</b> {self.get_total_utility() / YSCALE}")
         )
         print_formatted_text(
             HTML(
@@ -98,7 +116,7 @@ class Schedule:
                     f'<b>Task <ansimagenta>"{detail.name}"</ansimagenta></b> scheduled at '
                     f"<skyblue>{detail.start}</skyblue> → <skyblue>{detail.end}</skyblue>. "
                     f"Length: <b><ansigreen>{detail.task_length * DURATION_UNIT}</ansigreen></b>, "
-                    f"Utility: <ansiyellow>{detail.task_score/YSCALE}</ansiyellow>"
+                    f"Utility: <ansiyellow>{detail.task_utility/YSCALE}</ansiyellow>"
                 )
                 print_formatted_text(formatted_output)
 
@@ -115,14 +133,29 @@ class BasicModel:
     schedule_start: datetime
     schedule_end: datetime
 
-    def to_utility_model(self) -> UtilityModel:
-        return UtilityModel.from_basic_model(self)
+    def to_total_utility_model(self) -> TotalUtilityModel:
+        return TotalUtilityModel.from_basic_model(self)
 
     def get_nodes(self) -> Dict[str, AtomicTask]:
         return get_nodes(self.ast)
 
     def get_total_slots(self) -> int:
         return get_total_slots(self.schedule_start, self.schedule_end)
+
+    def solve(self) -> cp_model.CpSolver:
+        solver = cp_model.CpSolver()
+        # solver.parameters.log_search_progress = True
+        status = solver.solve(self.model)
+
+        match status:
+            case cp_model.OPTIMAL | cp_model.FEASIBLE:
+                pass
+            case cp_model.INFEASIBLE:
+                raise Exception("No solution found.")
+            case cp_model.UNKNOWN:
+                raise Exception("Limit reached")
+
+        return solver
 
     @classmethod
     def from_processed_ast(
@@ -135,12 +168,12 @@ class BasicModel:
 
         # populates start_time_vars
         start_time_vars: Dict[str, cp_model.IntVar] = {
-            id: model.new_int_var(0, total_slots - node.duration, f"start_time_{id}")
+            id: model.new_int_var(0, total_slots, f"start_time_{id}")
             for id, node in nodes.items()
         }
 
         end_time_vars: Dict[str, cp_model.IntVar] = {
-            id: model.new_int_var(node.duration, total_slots, f"end_time_{id}")
+            id: model.new_int_var(0, total_slots, f"end_time_{id}")
             for id, node in nodes.items()
         }
 
@@ -190,23 +223,27 @@ class BasicModel:
 
 
 @dataclass
-class UtilityModel(BasicModel):
-    scores: Dict[str, PiecewiseLinearConstraint]
+class TotalUtilityModel(BasicModel):
+    """
+    Maximizes total utility of the schedule
+    """
+
+    utilities: Dict[str, PiecewiseLinearConstraint]
+    # NOTE: These are not used in this model but we set them up in one place for convenience.
+    cuf_int: Dict[str, PiecewiseLinearConstraint]
+    cuf_prod: Dict[str, cp_model.IntVar]
+    cuf: Dict[str, cp_model.IntVar]
     # Only used for printing
     before_ddls: Dict[str, cp_model.IntVar]
     after_ddls: Dict[str, cp_model.IntVar]
     clippeds: Dict[str, cp_model.IntVar]
 
-    def to_interval_len_model(self) -> IntervalLenModel:
-        return IntervalLenModel.from_utility_model(self)
+    # It makes sense as basic layer cannot solve/print, and all subsequent layers can.
+    def to_schedule(self) -> Schedule:
+        solver = self.solve()
 
-    # NOTE: This will be inherited for all the rest models
-    def solve(self) -> Schedule:
-        solver = cp_model.CpSolver()
-        # solver.parameters.log_search_progress = True
-        status = solver.solve(self.model)
-
-        sol = Schedule(
+        return Schedule(
+            int(solver.objective_value),
             {
                 id: ScheduleDetail(
                     self.ast.nodes[id].name,
@@ -217,21 +254,19 @@ class UtilityModel(BasicModel):
                         solver.value(var.end_expr()), self.schedule_start
                     ),
                     solver.value(var.size_expr()),
-                    solver.value(self.scores[id].y),
+                    solver.value(self.utilities[id].y),
                 )
                 for id, var in self.intervals.items()
-            }
+            },
         )
 
-        match status:
-            case cp_model.OPTIMAL | cp_model.FEASIBLE:
-                pass
-            case cp_model.INFEASIBLE:
-                raise Exception("No solution found.")
-            case cp_model.UNKNOWN:
-                raise Exception("Limit reached")
+    def to_cuf_model(self) -> CUFModel:
+        return CUFModel.from_total_utility_model(self)
 
-        return sol
+    def set_objective_constraint(self):
+        optimal = int(self.solve().objective_value)
+        self.model.clear_objective()
+        self.model.add(sum(utility.y for utility in self.utilities.values()) >= optimal)
 
     @classmethod
     def from_basic_model(cls, basic_model: BasicModel) -> Self:
@@ -241,9 +276,6 @@ class UtilityModel(BasicModel):
 
         model = basic_model.model
         interval_vars = basic_model.intervals
-
-        # Use variables to represent per-task score
-        scores = {}
 
         # Calculate the available time to complete the task
         available_times: Dict[str, cp_model.IntVar] = {
@@ -297,30 +329,64 @@ class UtilityModel(BasicModel):
             else:
                 model.add(available_times[id] == interval_vars[id].size_expr())
 
+        # Use variables to represent per-task utility
+        utilities = {}
+        # integrated first part
+        cuf_int = {}
+        # trailing part multiplied
+        cuf_prod = {}
+        # cumulative-utility-function
+        cuf = {}
+
         # set the objective function for each task
         for id, node in nodes.items():
-            f_objective = piecewise_linear_objective(
-                node.duration,
+            base_opts: Dict[str, Any] = {
+                "mu_X": node.duration,
                 # TODO: we need to come up with a more sensible way of specifying confidence
-                node.duration // (node.confidence + 3),
-                node.priority,
-                total_slots,
-                stepsize=1,
-                yscale=YSCALE,
+                "sigma_X": node.duration // (node.confidence + 3),
+                "priority": node.priority,
+                "total_slots": total_slots,
+                "stepsize": 1,
+                "yscale": YSCALE,
+            }
+            f_objective = piecewise_linear_objective(**base_opts)
+            int_f_objective = piecewise_linear_objective(
+                **(base_opts | {"integrated": True})
             )
-            scores[id] = PiecewiseLinearConstraint(
+            utilities[id] = PiecewiseLinearConstraint(
                 model,
                 available_times[id],
                 f_objective,
                 upper_bound=True,
             )
+            cuf_int[id] = PiecewiseLinearConstraint(
+                model,
+                available_times[id],
+                int_f_objective,
+                upper_bound=True,
+            )
+            cuf_prod[id] = model.new_int_var(
+                0, node.priority * total_slots * YSCALE, f"cuf_prod_{id}"
+            )
+            model.add_multiplication_equality(
+                cuf_prod[id],
+                [utilities[id].y, total_slots - interval_vars[id].end_expr()],
+            )
+            # TODO: This 2x is probably not necessary
+            cuf[id] = model.new_int_var(
+                0, 2 * node.priority * total_slots * YSCALE, f"cuf_{id}"
+            )
+            model.add(cuf[id] == cuf_int[id].y + cuf_prod[id])
 
-        objective = sum([score.y for score in scores.values()])
+        objective = sum(utility.y for utility in utilities.values())
 
         model.maximize(objective)
 
         return cls(
-            scores=scores,
+            utilities=utilities,
+            cuf=cuf,
+            cuf_int=cuf_int,
+            cuf_prod=cuf_prod,
             before_ddls=before_ddls,
             after_ddls=after_ddls,
             clippeds=clippeds,
@@ -329,18 +395,43 @@ class UtilityModel(BasicModel):
 
 
 @dataclass
-class IntervalLenModel(UtilityModel):
-    @classmethod
-    def from_utility_model(cls, utility_model: UtilityModel) -> Self:
-        # Get the optimal goal from utility_model
-        utility_score = utility_model.solve().get_total_score()
-        model = utility_model.model
-        scores = utility_model.scores
-        model.clear_objective()
+class CUFModel(TotalUtilityModel):
+    """
+    A model that maximizes CUF integral
 
-        model.add(sum([score.y for score in scores.values()]) >= utility_score)
+    Integral is done in a Leibniz fashion
+    """
+
+    def to_interval_model(self) -> IntervalLenModel:
+        return IntervalLenModel.from_cuf_model(self)
+
+    @classmethod
+    def from_total_utility_model(cls, tu_model: TotalUtilityModel) -> Self:
+        tu_model.set_objective_constraint()
+
+        tu_model.model.maximize(sum(tu_model.cuf.values()))
+
+        return cls(**vars(tu_model))
+
+    def set_objective_constraint(self):
+        optimal = int(self.solve().objective_value)
+        self.model.clear_objective()
+        self.model.add(sum(self.cuf.values()) >= optimal)
+
+
+@dataclass
+class IntervalLenModel(CUFModel):
+    """
+    A model that reduces interval length when utilities of the tasks saturate
+    """
+
+    @classmethod
+    def from_cuf_model(cls, cuf_model: CUFModel) -> Self:
+        # Get the optimal goal from utility_model
+        cuf_model.set_objective_constraint()
+        model = cuf_model.model
         model.minimize(
-            sum([interval.size_expr() for interval in utility_model.intervals.values()])
+            sum([interval.size_expr() for interval in cuf_model.intervals.values()])
         )
 
-        return cls(**vars(utility_model))
+        return cls(**vars(cuf_model))
