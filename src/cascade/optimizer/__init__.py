@@ -161,6 +161,10 @@ class BasicModel:
     def from_processed_ast(
         cls, ast: ProcessedAST, schedule_start: datetime, schedule_end: datetime
     ) -> Self:
+        tz = ast.config.default_tz
+        schedule_start = schedule_start.replace(tzinfo=(schedule_start.tzinfo or tz))
+        schedule_end = schedule_end.replace(tzinfo=(schedule_end.tzinfo or tz))
+
         nodes = get_nodes(ast)
         total_slots = get_total_slots(schedule_start, schedule_end)
 
@@ -193,24 +197,21 @@ class BasicModel:
             for id in nodes.keys()
         }
 
-        # Add sleep intervals
-        bg_intervals = []
-        for bg_task in ast.bg.values():
-            starts = [
-                datetime_to_slot(start, schedule_start)
-                for start in bg_task.get_sessions(schedule_start, schedule_end)
-            ]
-            bg_duration = bg_task.duration // DURATION_UNIT
-            bg_intervals += [
-                # If no overlapping then name will not clash as well
-                model.new_fixed_size_interval_var(
-                    start, bg_duration, f"bg_task_start_{start}"
+        # add background blocks over which we shouldn't schedule
+        bg_blocks = []
+        for block in ast.get_background_blocks(schedule_start, schedule_end):
+            if block.duration:
+                start = datetime_to_slot(block.begin.datetime, schedule_start)
+                duration = block.duration // DURATION_UNIT
+                bg_blocks.append(
+                    # If no overlapping then name will not clash as well
+                    model.new_fixed_size_interval_var(
+                        start, duration, f"bg_task_start_{start}"
+                    )
                 )
-                for start in starts
-            ]
 
         # No parallel tasks
-        model.add_no_overlap(chain(interval_vars.values(), bg_intervals))
+        model.add_no_overlap(chain(interval_vars.values(), bg_blocks))
 
         # Enforce dependencies
         for id, node in nodes.items():

@@ -47,5 +47,7 @@ Our priority now is to create an easy to interface text-based todolist format (n
 And figure out how to enforce time mask (hard/soft mask? how to reconcile with existing ideas?)
 
 # TODOs
+- [x] Timezone support (default to default-timezone specified by user, don't use machine timezone or UTC if user didn't specify, error instead)
+- [x] Allow importing bg from a calendar subscribe.
 - [ ] Add `after` keyword to tasks so I can specify e.g. do it after Friday 13:00
-- [ ] Allow importing bg from a calendar subscribe.
+- [ ] Testing

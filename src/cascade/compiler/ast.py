@@ -3,6 +3,9 @@ Contains first pass AST, which upon construction, ensures syntax and semantics a
 """
 
 from __future__ import annotations
+from ics import Calendar
+from zoneinfo import ZoneInfo
+import requests
 from enum import Enum
 from croniter import croniter, croniter_range
 import pytimeparse
@@ -11,8 +14,14 @@ from typing import ClassVar, Dict, Optional, Union, Any, Annotated, Set, overrid
 from typing_extensions import Self
 from datetime import datetime, time, timedelta
 from slugify import slugify
+from prompt_toolkit import HTML, print_formatted_text
+from urllib.request import url2pathname
 from pydantic import (
+    AfterValidator,
     BeforeValidator,
+    FileUrl,
+    HttpUrl,
+    NaiveDatetime,
     Tag,
     BaseModel,
     Discriminator,
@@ -62,28 +71,45 @@ def parse_duration(value: Any) -> timedelta:
         return value
 
 
+def parse_timezone(value: Any) -> ZoneInfo:
+    if isinstance(value, str):
+        try:
+            parsed = ZoneInfo(value)
+        except:
+            raise ValueError(f"Invalid timezone: {value}")
+        return parsed
+    else:
+        return value
+
+
 class BaseTask(BaseModel):
     name: str
     # NOTE: order matters as we access name in the default factory
     id: str = Field(default_factory=lambda data: slugify(data["name"]))
     desc: Optional[str] = None
     tags: list[str] = Field(default_factory=list)
-    deadline: Optional[datetime] = None
+    deadline: Optional[NaiveDatetime] = None
+    timezone: Optional[Annotated[ZoneInfo, BeforeValidator(parse_timezone)]] = None
     # 1 is the lowest, higher number means higher priority
     priority: int = 1
     deps: Dependencies = Field(default_factory=Dependencies)
+
+    def update_timezone(self, default: Optional[ZoneInfo]):
+        tz = self.timezone or default
+        if self.deadline:
+            self.deadline = self.deadline.replace(tzinfo=tz)
 
     def update_ddl(self, ddl: datetime):
         """
         Update the deadline of the task if the ddl provided is earlier than the existing one.
         """
-        # TODO: Convert this into pattern matching
-        if not self.deadline:
-            self.deadline = ddl
-        elif self.deadline > ddl:
-            self.deadline = ddl
-        else:
-            return
+        match self.deadline:
+            case None:
+                self.deadline = ddl
+            case x if x > ddl:
+                self.deadline = ddl
+            case _:
+                pass
 
     def check_refs(self, ast: TaskAST) -> Set[str]:
         defined_ids = ast.get_ids()
@@ -218,7 +244,7 @@ def get_task_type(v: Any) -> str:
             return "step"
 
 
-# TODO: Ensure background tasks are not overlapping because otherwise it's conflicting at optimizer level
+# NOTE: We interpret these cron schedule as local time because they are mainly for sleep schedule etc. For timezone specific events use BackgroundCalendar
 class BackgroundTask(BaseModel):
     schedule: Annotated[str, BeforeValidator(parse_cron)]
     duration: Annotated[timedelta, BeforeValidator(parse_duration)]
@@ -238,6 +264,37 @@ class BackgroundTask(BaseModel):
         )
 
 
+class BackgroundCalendar(BaseModel):
+    url: Union[HttpUrl, FileUrl]
+
+    def get_calendar(self) -> Calendar:
+        return Calendar(self.get_raw())
+
+    def get_raw(self) -> str:
+        path = self.url
+        raw_url = str(path)
+
+        if isinstance(path, HttpUrl):
+            response = requests.get(raw_url, timeout=10)
+            print_formatted_text(
+                HTML(f"<grey>Downloading calendar from {path} ...</grey>")
+            )
+            # Raise an exception for bad status codes (4xx or 5xx)
+            response.raise_for_status()
+            return response.text
+        else:
+            # Convert the file URI's path to a system-specific file path.
+            # This correctly handles different OS path formats.
+            file_path = url2pathname(path.path or "")
+
+            with open(file_path, "r", encoding="utf-8") as f:
+                return f.read()
+
+
+class CascadeConfig(BaseModel):
+    default_tz: Annotated[ZoneInfo, AfterValidator(parse_timezone)]
+
+
 class TaskAST(BaseModel):
     """
     An AST describing tasks.
@@ -247,7 +304,8 @@ class TaskAST(BaseModel):
     - deadlines of subtasks are compatible with the parent task
     """
 
-    bg: Dict[str, BackgroundTask] = {}
+    config: CascadeConfig
+    bg: Dict[str, Union[BackgroundTask, BackgroundCalendar]] = {}
     tasks: list[
         Annotated[
             Union[Annotated[Step, Tag("step")], Annotated[Goal, Tag("goal")]],
@@ -261,7 +319,9 @@ class TaskAST(BaseModel):
         """
         return self.tasks
 
-    def get_background_tasks(self) -> Dict[str, BackgroundTask]:
+    def get_background_tasks(
+        self,
+    ) -> Dict[str, Union[BackgroundTask, BackgroundCalendar]]:
         return self.bg
 
     def get_tasks_in_dict(self) -> dict[str, Union[Step, Goal]]:
@@ -398,6 +458,7 @@ class TaskAST(BaseModel):
 
         # TODO: It's probably more efficient if we reverse the edges used in topological sort. However, our stored format is not very favorable for this.
         for id in reversed(self.topo_sort()):
+            result_copy.get_tasks_in_dict()[id].update_timezone(self.config.default_tz)
             result_copy.get_tasks_in_dict()[id].propogate_ddl(result_copy)
             result_copy.get_tasks_in_dict()[id].propogate_priority(result_copy)
 
