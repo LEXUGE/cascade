@@ -12,7 +12,7 @@ import yaml
 
 from typing import TYPE_CHECKING
 
-from cascade.optimizer import BasicModel, Schedule
+from cascade.optimizer import schedule
 from cascade.compiler.processed_ast import ProcessedAST
 
 if TYPE_CHECKING:
@@ -30,19 +30,6 @@ def import_tasks(file_path: str):
         tasks = TaskAST.model_validate(raw_data)
         print(f"Successfully imported tasks from {file_path}")
         return tasks
-
-
-def compile(src: TaskAST, start: datetime, end: datetime) -> Schedule:
-    ast = ProcessedAST.from_raw_ast(src)
-    sol = (
-        BasicModel.from_processed_ast(ast, start, end)
-        .to_total_utility_model()
-        .to_cuf_model()
-        .to_interval_model()
-        .to_schedule()
-    )
-    sol.print_schedule()
-    return sol
 
 
 def handle_cmd(raw_cmd: str, state: "AppState"):
@@ -74,6 +61,48 @@ def handle_cmd(raw_cmd: str, state: "AppState"):
         case "print":
             print(repr(state.src))
 
+        case "schedule":
+            if state.src is None:
+                raise RuntimeError("No tasks loaded. Please import tasks first.")
+            now = arrow.now(tz=state.src.config.default_tz)
+            match args:
+                case ["export", "ics"]:
+                    if state.schedule is None:
+                        raise RuntimeError(
+                            "No schedule compiled. Please compile first."
+                        )
+                    else:
+                        pprint(HTML(f"<grey>{state.schedule.to_ics()}</grey>"))
+                case ["next_day", end_str]:
+                    start = now.shift(days=+1).floor("day").datetime
+                    end_delta = pytimeparse.parse(end_str)
+                    if not end_delta:
+                        raise ValueError(f"Failed to parse duration: {end_str}")
+
+                    end = start + timedelta(seconds=end_delta)
+                    sol = schedule(state.src, start, end)
+                    sol.print_schedule()
+                    state.schedule = sol
+
+                case [start_str, end_str]:
+                    start_delta, end_delta = pytimeparse.parse(
+                        start_str
+                    ), pytimeparse.parse(end_str)
+                    if not start_delta:
+                        raise ValueError(f"Failed to parse duration: {start_str}")
+                    if not end_delta:
+                        raise ValueError(f"Failed to parse duration: {end_str}")
+
+                    start = now + timedelta(seconds=start_delta)
+                    end = start + timedelta(seconds=end_delta)
+                    sol = schedule(state.src, start.datetime, end.datetime)
+                    sol.print_schedule()
+                    state.schedule = sol
+                case _:
+                    pprint(
+                        "Usage: schedule <start_time relative to now> <end_time relative to start_time>"
+                    )
+
         case "dev":
             if state.src is None:
                 raise RuntimeError("No tasks loaded. Please import tasks first.")
@@ -85,30 +114,9 @@ def handle_cmd(raw_cmd: str, state: "AppState"):
                 case ["processed_ast"]:
                     state.processed = ProcessedAST.from_raw_ast(state.src)
                     pp(state.processed)
-                case ["compile", "next", duration]:
-                    parsed = pytimeparse.parse(duration)
-                    if not parsed:
-                        raise ValueError(f"Failed to parse duration: {duration}")
-                    duration = timedelta(seconds=int(parsed))
-                    start = datetime.combine(
-                        arrow.now().shift(days=+1).date(), datetime.min.time()
-                    )
-                    end = start + duration
-                    state.schedule = compile(state.src, start, end)
-                case ["compile", start_str, end_str]:
-                    start: datetime = arrow.get(start_str).datetime
-                    end: datetime = arrow.get(end_str).datetime
-                    state.schedule = compile(state.src, start, end)
-                case ["export", "ics"]:
-                    if state.schedule is None:
-                        raise RuntimeError(
-                            "No schedule compiled. Please compile first."
-                        )
-                    else:
-                        pprint(HTML(f"<grey>{state.schedule.to_ics()}</grey>"))
                 case _:
                     pprint(
-                        "Usage: dev [normalize_deps | propagate_ddl | processed_ast | compile <start_date> <end_date> | compile next <duration>]"
+                        "Usage: dev [normalize_deps | propagate_ddl | processed_ast]"
                     )
 
         case _:
@@ -122,16 +130,15 @@ def repl(state: "AppState") -> None:
         {
             "import": PathCompleter(),
             "print": None,
+            "schedule": {
+                "export": {
+                    "ics": None,
+                },
+            },
             "dev": {
                 "normalize_deps": None,
                 "propagate": None,
                 "processed_ast": None,
-                "compile": {
-                    "next": None,
-                },
-                "export": {
-                    "ics": None,
-                },
             },
         }
     )

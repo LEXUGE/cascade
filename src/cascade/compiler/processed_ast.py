@@ -78,7 +78,8 @@ class ProcessedAST:
                 final.append(prev_block)
                 prev_block = block
 
-        final.append(prev_block)
+        if prev_block:
+            final.append(prev_block)
 
         return final
 

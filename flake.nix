@@ -87,7 +87,6 @@
 
         devShells = {
           default = pkgs.mkShell {
-            buildInputs = self.checks.${system}.pre-commit-check.enabledPackages;
             packages = [
               python
               pkgs.uv
@@ -112,8 +111,6 @@
             hooks = {
               nixfmt-rfc-style.enable = true;
               black.enable = true;
-              # TODO: possibly replace this with pyrefly.
-              # pyright.enable = true;
             };
           };
         };
