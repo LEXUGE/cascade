@@ -183,6 +183,7 @@ class Goal(BaseTask):
     type: ClassVar[str] = "goal"
 
     subtasks: list[str]
+    implicit_deps_by_order: Optional[bool] = False
 
     @model_validator(mode="after")
     def validate_goal(self) -> Self:
@@ -229,6 +230,16 @@ class Goal(BaseTask):
         tasks_dict = ast.get_tasks_in_dict()
         for t in self.subtasks:
             tasks_dict[t].priority *= self.priority
+
+    def inject_implicit_deps(self, ast: TaskAST):
+        """
+        Inject implicit dependencies specified by subtask ordering. This should be done before dependency graph checking
+        """
+        if self.implicit_deps_by_order:
+            for i in range(1, len(self.subtasks)):
+                ast.get_tasks_in_dict()[self.subtasks[i]].deps.after.add(
+                    self.subtasks[i - 1]
+                )
 
 
 def get_task_type(v: Any) -> str:
@@ -376,6 +387,9 @@ class TaskAST(BaseModel):
     def check(self) -> Self:
         self.check_refs()
         self.check_deadlines()
+        # NOTE: Implicit dependency injection should be done before deps checking
+        for goal in self.get_goals():
+            goal.inject_implicit_deps(self)
         self.check_deps_graph()
         return self
 
