@@ -43,7 +43,7 @@ def handle_schedule(
         case OutputFormat.Rendered:
             sol.print_schedule()
         case OutputFormat.Ics:
-            print(f"<grey>{sol.to_ics()}</grey>")
+            print(f"{sol.to_ics()}")
         case OutputFormat.NoOutput:
             pass
 
