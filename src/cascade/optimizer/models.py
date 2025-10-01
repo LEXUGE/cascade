@@ -7,6 +7,7 @@ Converted from ProcessedAST to CompiledModel which can be solved by CP-SAT solve
 
 from __future__ import annotations
 from itertools import chain
+import html
 from ics import Calendar, Event
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -130,12 +131,12 @@ class Schedule:
             if detail.task_length == 0:
                 print_formatted_text(
                     HTML(
-                        f'<b>Task <ansimagenta>"{detail.name}"<grey>({id})</grey></ansimagenta> is <red>not scheduled</red></b>'
+                        f'<b>Task <ansimagenta>"{html.escape(detail.name)}"<grey>({id})</grey></ansimagenta> is <red>not scheduled</red></b>'
                     )
                 )
             else:
                 formatted_output = HTML(
-                    f'<b>Task <ansimagenta>"{detail.name}"</ansimagenta></b> scheduled at '
+                    f'<b>Task <ansimagenta>"{html.escape(detail.name)}"</ansimagenta></b> scheduled at '
                     f"<skyblue>{detail.start}</skyblue> → <skyblue>{detail.end}</skyblue>. "
                     f"Length: <b><ansigreen>{detail.task_length * DURATION_UNIT}</ansigreen></b>, "
                     f"Utility: <ansiyellow>{detail.task_utility/YSCALE}</ansiyellow>"
