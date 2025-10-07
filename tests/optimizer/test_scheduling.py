@@ -13,7 +13,8 @@ DEFAULT_TZ = ZoneInfo("Europe/London")
 START = arrow.get("1970-01-01").datetime
 
 
-def ast_to_sol(ast: TaskAST, total_dur: timedelta) -> Schedule:
+def ast_to_sol(src: TaskAST, total_dur: timedelta) -> Schedule:
+    ast = ProcessedAST.from_raw_ast(src)
     return schedule(ast, START, START + total_dur)
 
 

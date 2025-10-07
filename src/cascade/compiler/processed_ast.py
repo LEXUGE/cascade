@@ -6,9 +6,8 @@ The tree will only contain "step" tasks.
 
 from __future__ import annotations
 import math
-from copy import deepcopy
 from dataclasses import dataclass
-from datetime import timedelta, datetime
+from datetime import datetime
 from typing import Dict, List, Set, Optional, Self
 
 from ics import Calendar, Event

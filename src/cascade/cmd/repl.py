@@ -7,8 +7,7 @@ from prompt_toolkit import HTML, PromptSession, print_formatted_text as pprint
 from pprint import pp
 from cascade.cmd.parser import build_schedule_parser
 from cascade.compiler.processed_ast import ProcessedAST
-from cascade.cmd.handler import handle_schedule, import_tasks
-from cascade.cmd.types import AppState, OutputFormat
+from cascade.cmd.types import AppState
 
 
 # TODO: Move to object oriented command dispatch when we grow enough complication.
@@ -26,39 +25,31 @@ def handle_cmd(raw_cmd: str, state: AppState):
         case "import":
             match args:
                 case []:
-                    if state.path is not None:
-                        new = import_tasks(state.path)
-                        if new == state.src:
-                            print(f"No changes detected from {state.path}")
-                        else:
-                            state.src = new
-                            print(f"Successfully imported tasks from {state.path}")
-                    else:
-                        print("No previous path set. Doing nothing")
+                    state.import_tasks(None)
                 case [path]:
-                    state.src = import_tasks(path)
-                    state.path = path
+                    state.import_tasks(path)
                 case _:
                     print("Usage: import [file path]")
 
         case "schedule":
             parser = argparse.ArgumentParser(exit_on_error=False)
             build_schedule_parser(parser)
-            if state.src is None:
-                raise RuntimeError("No tasks loaded. Please import tasks first.")
             parsed = parser.parse_args(args)
-            handle_schedule(parsed.start_str, parsed.end_str, state.src, parsed.output)
+            state.handle_schedule(
+                parsed.start_str,
+                parsed.end_str,
+            )
+            state.print_schedule(parsed.output)
 
         case "dev":
-            if state.src is None:
+            if state.ast is None:
                 raise RuntimeError("No tasks loaded. Please import tasks first.")
             match args:
                 case ["normalize_deps"]:
-                    pp(state.src.normalize_dependencies())
+                    pp(state.ast.normalize_dependencies())
                 case ["propagate"]:
-                    pp(state.src.propogate_properties())
+                    pp(state.ast.propogate_properties())
                 case ["processed_ast"]:
-                    state.processed = ProcessedAST.from_raw_ast(state.src)
                     pp(state.processed)
                 case _:
                     pprint(

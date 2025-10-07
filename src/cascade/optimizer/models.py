@@ -60,8 +60,7 @@ def from_slot_to_datetime(n: int, schedule_start: datetime) -> datetime:
     return schedule_start + n * DURATION_UNIT
 
 
-def schedule(src: TaskAST, start: datetime, end: datetime) -> Schedule:
-    ast = ProcessedAST.from_raw_ast(src)
+def schedule(ast: ProcessedAST, start: datetime, end: datetime) -> Schedule:
     sol = (
         BasicModel.from_processed_ast(ast, start, end)
         .to_total_utility_model()
