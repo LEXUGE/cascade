@@ -27,8 +27,9 @@ class AppState:
     src: Optional[str] = None
     ast: Optional[TaskAST] = None
     processed: Optional[ProcessedAST] = None
+    processed_updated: Optional[datetime] = None
     schedule: Optional[Schedule] = None
-    cache: Dict[tuple[str, datetime, datetime], Schedule] = {}
+    cache: Dict[tuple[datetime, datetime, datetime], Schedule] = {}
 
     def import_tasks(self, path: Optional[str]):
         # merge two paths, with the provided path taking precedence
@@ -45,10 +46,12 @@ class AppState:
             self.src, self.ast, self.processed = new_src, new_ast, new_processed
             # clean up schedule
             self.schedule = None
+            self.processed_updated = datetime.now()
             print(f"Successfully imported tasks from {self.path}")
 
     def handle_schedule(self, start_str: str, end_str: str):
-        if not self.src or not self.processed:
+        # processed_updated must be present when processed is present
+        if not self.src or not self.processed or not self.processed_updated:
             raise RuntimeError("Missing tasks to schedule")
 
         now = arrow.now(tz=self.processed.config.default_tz)
@@ -71,10 +74,10 @@ class AppState:
         end = start + timedelta(seconds=end_delta)
 
         # explicit checking necessary for lazy evaluation.
-        if (self.src, start, end) in self.cache:
-            self.schedule = self.cache[(self.src, start, end)]
+        if (self.processed_updated, start, end) in self.cache:
+            self.schedule = self.cache[(self.processed_updated, start, end)]
         else:
-            self.schedule = self.cache[(self.src, start, end)] = schedule(
+            self.schedule = self.cache[(self.processed_updated, start, end)] = schedule(
                 self.processed, start, end
             )
 
