@@ -3,6 +3,7 @@ Contains first pass AST, which upon construction, ensures syntax and semantics a
 """
 
 from __future__ import annotations
+import re
 from ics import Calendar
 from zoneinfo import ZoneInfo
 import requests
@@ -10,7 +11,17 @@ from enum import Enum
 from croniter import croniter, croniter_range
 import pytimeparse
 from copy import copy, deepcopy
-from typing import ClassVar, Dict, Optional, Union, Any, Annotated, Set, override
+from typing import (
+    ClassVar,
+    Dict,
+    Optional,
+    Pattern,
+    Union,
+    Any,
+    Annotated,
+    Set,
+    override,
+)
 from typing_extensions import Self
 from datetime import datetime, time, timedelta
 from slugify import slugify
@@ -25,6 +36,7 @@ from pydantic import (
     Tag,
     BaseModel,
     Discriminator,
+    field_validator,
     model_validator,
     Field,
     Discriminator,
@@ -237,8 +249,8 @@ class Goal(BaseTask):
         """
         if self.implicit_deps_by_order:
             for i in range(1, len(self.subtasks)):
-                ast.get_tasks_in_dict()[self.subtasks[i]].deps.after.add(
-                    self.subtasks[i - 1]
+                ast.get_tasks_in_dict()[self.subtasks[i]].deps.after.update(
+                    self.subtasks[:i]
                 )
 
 
@@ -277,9 +289,21 @@ class BackgroundTask(BaseModel):
 
 class BackgroundCalendar(BaseModel):
     url: Union[HttpUrl, FileUrl]
+    # on default allows all events
+    filter: Set[str] = set()
+    # use filter as a whitelist or blacklist
+    whitelist: bool = False
+
+    def matches(self, name: str):
+        name = name.casefold()
+        if self.whitelist:
+            return any(s.casefold() in name for s in self.filter)
+        else:
+            return not any(s.casefold() in name for s in self.filter)
 
     def get_calendar(self) -> Calendar:
-        return Calendar(self.get_raw())
+        cal = Calendar(self.get_raw())
+        return Calendar(events=[e for e in cal.events if self.matches(e.name)])
 
     def get_raw(self) -> str:
         path = self.url

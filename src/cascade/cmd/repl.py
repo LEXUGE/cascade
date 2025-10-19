@@ -1,4 +1,5 @@
 import argparse
+import html
 import traceback
 import shlex
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
@@ -88,6 +89,10 @@ def repl() -> None:
         except EOFError:
             break
         except Exception as e:
-            pprint(HTML(f"<ansired>{e}</ansired>\n{traceback.format_exc()}"))
+            pprint(
+                HTML(
+                    f"<ansired>{html.escape(str(e))}</ansired>\n{html.escape(traceback.format_exc())}"
+                )
+            )
 
     pprint("Good bye!")

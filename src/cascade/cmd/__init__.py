@@ -1,3 +1,4 @@
+import html
 import traceback
 from prompt_toolkit import HTML, print_formatted_text as pprint
 from cascade.cmd.repl import repl
@@ -17,7 +18,11 @@ def cmd():
             case "repl":
                 repl()
     except Exception as e:
-        pprint(HTML(f"<ansired>{e}</ansired>\n{traceback.format_exc()}"))
+        pprint(
+            HTML(
+                f"<ansired>{html.escape(str(e))}</ansired>\n{html.escape(traceback.format_exc())}"
+            )
+        )
 
 
 __all__ = ["cmd"]

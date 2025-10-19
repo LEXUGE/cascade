@@ -78,6 +78,7 @@ class ScheduleDetail:
     end: datetime
     task_length: int
     task_utility: float
+    max_utility: int
 
 
 @dataclass
@@ -138,7 +139,7 @@ class Schedule:
                     f'<b>Task <ansimagenta>"{html.escape(detail.name)}"</ansimagenta></b> scheduled at '
                     f"<skyblue>{detail.start}</skyblue> → <skyblue>{detail.end}</skyblue>. "
                     f"Length: <b><ansigreen>{detail.task_length * DURATION_UNIT}</ansigreen></b>, "
-                    f"Utility: <ansiyellow>{detail.task_utility/YSCALE}</ansiyellow>"
+                    f"Utility: <ansiyellow>{detail.task_utility/YSCALE}/{detail.max_utility}</ansiyellow>"
                 )
                 print_formatted_text(formatted_output)
 
@@ -278,6 +279,7 @@ class TotalUtilityModel(BasicModel):
     # It makes sense as basic layer cannot solve/print, and all subsequent layers can.
     def to_schedule(self) -> Schedule:
         solver = self.solve()
+        nodes = self.get_nodes()
 
         return Schedule(
             int(solver.objective_value),
@@ -292,6 +294,7 @@ class TotalUtilityModel(BasicModel):
                     ),
                     solver.value(var.size_expr()),
                     solver.value(self.utilities[id].y),
+                    nodes[id].priority,
                 )
                 for id, var in self.intervals.items()
             },

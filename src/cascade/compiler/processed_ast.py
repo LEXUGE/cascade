@@ -18,6 +18,7 @@ from cascade.compiler.ast import (
     BackgroundTask,
     CascadeConfig,
     Status,
+    Step,
     TaskAST,
 )
 
@@ -95,6 +96,13 @@ class ProcessedAST:
 
         result: Dict[str, AtomicTask] = {}
 
+        # steps that are already done, so we need to remove it from the dependencies.
+        steps_done = set(
+            k
+            for k, v in raw_ast.get_tasks_in_dict().items()
+            if isinstance(v, Step) and v.status == Status.done
+        )
+
         # convert to atomic tasks
         for step in normalized_steps:
             result[step.id] = AtomicTask(
@@ -104,7 +112,8 @@ class ProcessedAST:
                 priority=step.priority,
                 confidence=step.confidence,
                 duration=math.ceil(step.duration / DURATION_UNIT),
-                deps=step.deps.after,
+                # NOTE: We need to remove done tasks from deps as they will not be present to the model
+                deps=set(s for s in step.deps.after if s not in steps_done),
                 deadline=step.deadline,
                 # NOTE: dup is currently unused
             )
