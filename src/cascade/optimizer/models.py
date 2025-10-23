@@ -17,7 +17,7 @@ from typing_extensions import Self, Dict
 from ortools.sat.python import cp_model
 
 from cascade.compiler import DURATION_UNIT
-from cascade.compiler.ast import Status, TaskAST
+from cascade.compiler.ast import Status
 from .helpers import piecewise_linear_objective
 from .piecewise_functions.piecewise_linear_function import (
     PiecewiseLinearConstraint,
@@ -144,6 +144,13 @@ class Schedule:
                 print_formatted_text(formatted_output)
 
 
+def add_hints(model: cp_model.CpModel, solver: cp_model.CpSolver):
+    model.clear_hints()
+    for i, _ in enumerate(model.proto.variables):
+        v_ = model.get_int_var_from_proto_index(i)
+        model.add_hint(v_, solver.value(v_))
+
+
 @dataclass
 class BasicModel:
     """
@@ -167,7 +174,11 @@ class BasicModel:
 
     def solve(self) -> cp_model.CpSolver:
         solver = cp_model.CpSolver()
-        # solver.parameters.log_search_progress = True
+        solver.parameters.log_search_progress = True
+        # stop when we are within 2% of the upper bound of optimum (provable) cause making it drop can take a long time.
+        solver.parameters.relative_gap_limit = 0.02
+        # since we are adding hints, models are no longer suffering from cold start issues, we might just add a time limit to solve plateau problem
+        solver.parameters.max_time_in_seconds = 120
         status = solver.solve(self.model)
 
         match status:
@@ -306,8 +317,10 @@ class TotalUtilityModel(BasicModel):
         return CUFModel.from_total_utility_model(self)
 
     def set_objective_constraint(self):
-        optimal = int(self.solve().objective_value)
+        sol = self.solve()
+        optimal = int(sol.objective_value)
         self.model.clear_objective()
+        add_hints(self.model, sol)
         self.model.add(sum(utility.y for utility in self.utilities.values()) >= optimal)
 
     @classmethod
@@ -414,9 +427,8 @@ class TotalUtilityModel(BasicModel):
                 cuf_prod[id],
                 [utilities[id].y, total_slots - interval_vars[id].end_expr()],
             )
-            # TODO: This 2x is probably not necessary
             cuf[id] = model.new_int_var(
-                0, 2 * node.priority * total_slots * YSCALE, f"cuf_{id}"
+                0, node.priority * total_slots * YSCALE, f"cuf_{id}"
             )
             model.add(cuf[id] == cuf_int[id].y + cuf_prod[id])
 
@@ -456,8 +468,10 @@ class CUFModel(TotalUtilityModel):
         return cls(**vars(tu_model))
 
     def set_objective_constraint(self):
-        optimal = int(self.solve().objective_value)
+        sol = self.solve()
+        optimal = int(sol.objective_value)
         self.model.clear_objective()
+        add_hints(self.model, sol)
         self.model.add(sum(self.cuf.values()) >= optimal)
 
 
