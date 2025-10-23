@@ -174,11 +174,14 @@ class BasicModel:
 
     def solve(self) -> cp_model.CpSolver:
         solver = cp_model.CpSolver()
-        solver.parameters.log_search_progress = True
+
+        solver.parameters.log_search_progress = self.ast.config.log
+        # NOTE: Stop after relative gap reached seems to cause test to fail on CUF model maybe due to different randomization etc.
         # stop when we are within 2% of the upper bound of optimum (provable) cause making it drop can take a long time.
-        solver.parameters.relative_gap_limit = 0.02
+        # solver.parameters.relative_gap_limit = 0.02
+
         # since we are adding hints, models are no longer suffering from cold start issues, we might just add a time limit to solve plateau problem
-        solver.parameters.max_time_in_seconds = 120
+        solver.parameters.max_time_in_seconds = self.ast.config.solver_timeout
         status = solver.solve(self.model)
 
         match status:
@@ -245,6 +248,16 @@ class BasicModel:
             for id in nodes.keys()
         }
 
+        int_zero_length = {}
+        for id in nodes.keys():
+            int_zero_length[id] = model.new_bool_var(f"{id}_is_zero")
+            model.add(interval_vars[id].size_expr() == 0).only_enforce_if(
+                int_zero_length[id]
+            )
+            model.add(interval_vars[id].size_expr() != 0).only_enforce_if(
+                int_zero_length[id].negated()
+            )
+
         # add background blocks over which we shouldn't schedule
         bg_blocks = []
         for block in ast.get_background_blocks(schedule_start, schedule_end):
@@ -266,6 +279,10 @@ class BasicModel:
             for prereq in node.deps:
                 model.add(
                     interval_vars[prereq].end_expr() <= interval_vars[id].start_expr()
+                )
+                # If the model schedule prerequisite as 0 seconds, then we should enforce current node to also be 0 seconds
+                model.add(interval_vars[id].size_expr() == 0).only_enforce_if(
+                    int_zero_length[prereq]
                 )
 
         return cls(ast, model, interval_vars, schedule_start, schedule_end)

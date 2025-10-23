@@ -328,6 +328,8 @@ class BackgroundCalendar(BaseModel):
 
 class CascadeConfig(BaseModel):
     default_tz: Annotated[ZoneInfo, AfterValidator(parse_timezone)]
+    log: bool = False
+    solver_timeout: int = 120
 
 
 class TaskAST(BaseModel):
